@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>TV Player</title>
+<style>
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+#msg { color: #fff; font: 4vmin Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100%; }
+</style>
+</head>
+<body>
+<div id="msg">No video selected.</div>
+<script>
+// Relay page: plays a YouTube video from this public address so YouTube knows where it is embedded.
+// Usage: ?v=VIDEO_ID (optional &t=SECONDS)
+(function () {
+var params = new URLSearchParams(window.location.search);
+var id = params.get("v") || "";
+var start = parseInt(params.get("t") || "0", 10);
+if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return;
+var src = "https://www.youtube.com/embed/" + id + "?autoplay=1&playsinline=1&rel=0";
+if (start > 0) src += "&start=" + start;
+var f = document.createElement("iframe");
+f.src = src;
+f.title = "YouTube video";
+f.setAttribute("allow", "autoplay; encrypted-media; fullscreen; picture-in-picture");
+f.setAttribute("allowfullscreen", "");
+f.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+document.body.innerHTML = "";
+document.body.appendChild(f);
+})();
+</script>
+</body>
+</html>
