@@ -7,7 +7,7 @@
 <title>TV Player</title>
 <style>
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+#player, iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
 #msg { color: #fff; font: 4vmin Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100%; }
 </style>
 </head>
@@ -16,22 +16,60 @@ iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:
 <script>
 // Relay page: plays a YouTube video from this public address so YouTube knows where it is embedded.
 // Usage: ?v=VIDEO_ID (optional &t=SECONDS)
-(function () {
+// The TV app can send commands with postMessage: {cmd:"seek", delta:10}, {cmd:"playpause"}
+// This page tells the TV app when a video ends: {source:"tv-player", event:"ended"}
 var params = new URLSearchParams(window.location.search);
 var id = params.get("v") || "";
 var start = parseInt(params.get("t") || "0", 10);
-if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return;
-var src = "https://www.youtube.com/embed/" + id + "?autoplay=1&playsinline=1&rel=0";
-if (start > 0) src += "&start=" + start;
-var f = document.createElement("iframe");
-f.src = src;
-f.title = "YouTube video";
-f.setAttribute("allow", "autoplay; encrypted-media; fullscreen; picture-in-picture");
-f.setAttribute("allowfullscreen", "");
-f.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
-document.body.innerHTML = "";
-document.body.appendChild(f);
-})();
+var player = null;
+
+function tellParent(data) {
+  data.source = "tv-player";
+  try { window.parent.postMessage(data, "*"); } catch (e) {}
+}
+
+function onYouTubeIframeAPIReady() {
+  var msg = document.getElementById("msg");
+  if (msg) msg.parentNode.removeChild(msg);
+  var holder = document.createElement("div");
+  holder.id = "player";
+  document.body.appendChild(holder);
+  player = new YT.Player("player", {
+    videoId: id,
+    host: "https://www.youtube.com",
+    playerVars: { autoplay: 1, playsinline: 1, rel: 0, start: start > 0 ? start : 0, origin: window.location.origin },
+    events: {
+      onReady: function (e) { e.target.playVideo(); tellParent({ event: "ready" }); },
+      onStateChange: function (e) { if (e.data === 0) tellParent({ event: "ended" }); },
+      onError: function (e) { tellParent({ event: "error", code: e.data }); }
+    }
+  });
+  var f = document.querySelector("iframe");
+  if (f) f.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+}
+
+window.addEventListener("message", function (e) {
+  var d = e.data;
+  if (!player || !d || typeof d !== "object" || !d.cmd) return;
+  try {
+    if (d.cmd === "seek") {
+      var t = player.getCurrentTime() + (Number(d.delta) || 0);
+      var dur = player.getDuration();
+      if (t < 0) t = 0;
+      if (dur && t > dur - 1) t = dur - 1;
+      player.seekTo(t, true);
+      tellParent({ event: "seeked", time: Math.round(t) });
+    } else if (d.cmd === "playpause") {
+      if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo();
+    }
+  } catch (err) {}
+});
+
+if (/^[A-Za-z0-9_-]{11}$/.test(id)) {
+  var s = document.createElement("script");
+  s.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(s);
+}
 </script>
 </body>
 </html>
